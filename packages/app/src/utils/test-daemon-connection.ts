@@ -6,6 +6,8 @@ import {
 } from "@getpaseo/client/internal/daemon-client";
 import type { DaemonClientConfig } from "@getpaseo/client/internal/daemon-client";
 import type { HostConnection } from "@/types/host-connection";
+import { createAppWebSocketFactory } from "@/runtime/websocket-factory";
+import { createHostLogger } from "@/runtime/host-logger";
 import { getOrCreateClientId } from "./client-id";
 import { resolveAppVersion } from "./app-version";
 import {
@@ -28,6 +30,7 @@ export interface DaemonProbeClient {
 }
 
 export interface DaemonConnectionDependencies<TClient extends DaemonProbeClient> {
+  createLogger: typeof createHostLogger;
   getClientId(): Promise<string>;
   resolveAppVersion(): string | null;
   createDesktopTransportFactory(): DaemonClientConfig["transportFactory"] | null;
@@ -36,6 +39,7 @@ export interface DaemonConnectionDependencies<TClient extends DaemonProbeClient>
 }
 
 const defaultDaemonConnectionDependencies: DaemonConnectionDependencies<DaemonClient> = {
+  createLogger: createHostLogger,
   getClientId: getOrCreateClientId,
   resolveAppVersion,
   createDesktopTransportFactory: createDesktopDaemonTransportFactory,
@@ -154,6 +158,7 @@ function buildBaseClientConfig(params: {
     clientType: "mobile" as const,
     appVersion,
     suppressSendErrors: true,
+    webSocketFactory: createAppWebSocketFactory(),
     reconnect: { enabled: false },
     createPluginClientBundleStore: options?.createPluginClientBundleStore,
     ...resolveConnectionCredentials(connection, options),
@@ -339,5 +344,9 @@ export async function connectToDaemon(
   deps: DaemonConnectionDependencies<DaemonProbeClient> = defaultDaemonConnectionDependencies,
 ): Promise<{ client: DaemonProbeClient; serverId: string; hostname: string | null }> {
   const config = await buildClientConfig(connection, options?.serverId, options, deps);
-  return connectAndProbe(config, resolveTimeout(connection, options), deps);
+  let serverId = options?.serverId;
+  config.logger = deps.createLogger(() => serverId);
+  const result = await connectAndProbe(config, resolveTimeout(connection, options), deps);
+  serverId = result.serverId;
+  return result;
 }

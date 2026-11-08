@@ -14,6 +14,10 @@ function resolveUserPrompts(persisted: PersistedConfig): MutableDaemonConfig["us
   return persisted.daemon?.userPrompts ?? [];
 }
 
+function usageEnabled(persisted: PersistedConfig): boolean {
+  return persisted.daemon?.usage?.enabled !== false;
+}
+
 function reloadableConfig(
   persisted: PersistedConfig,
   options: { relayEnabledFallback?: boolean } = {},
@@ -27,6 +31,7 @@ function reloadableConfig(
       enabled: relay.enabled ?? options.relayEnabledFallback ?? true,
     },
     mcp: { enabled: true, injectIntoAgents: false },
+    usage: { enabled: usageEnabled(persisted) },
     browserTools: { enabled: daemon.browserTools?.enabled ?? false },
     providers: (agents.providers ?? {}) as MutableDaemonConfig["providers"],
     metadataGeneration: { providers: agents.metadataGeneration?.providers ?? [] },
@@ -1006,6 +1011,15 @@ describe("DaemonConfigStore", () => {
 
     await store.patch({ idleRuntimeCleanup: true });
     expect(loadConfig(paseoHome, { env: {} }).idleRuntimeCleanup).toBe(true);
+    await store.patch({ resumeOnStartup: false, resumePrompt: "Keep going.\n" });
+    expect(loadPersistedConfig(paseoHome).agents).toMatchObject({
+      resumeOnStartup: false,
+      resumePrompt: "Keep going.\n",
+    });
+    expect(loadConfig(paseoHome, { env: {} })).toMatchObject({
+      resumeOnStartup: false,
+      resumePrompt: "Keep going.\n",
+    });
   });
 
   test("patch persists custom ACP provider overrides into config.json", async () => {
@@ -1631,4 +1645,32 @@ describe("DaemonConfigStore speech settings", () => {
     expect(other.get().envOverrides).toEqual({ "features.voiceMode.stt.model": "STT_MODEL" });
     expect(JSON.stringify(other.get())).not.toContain("secret");
   });
+});
+
+test("usage policy persists across restart and live reload", async () => {
+  const paseoHome = mkdtempSync(path.join(tmpdir(), "usage-policy-"));
+  try {
+    const initial = reloadableConfig({});
+    const store = new DaemonConfigStore(paseoHome, initial, undefined, {
+      reloadSource: {
+        resolve: (persisted) => ({
+          mutable: reloadableConfig(persisted),
+          overrideControlledPaths: [],
+        }),
+      },
+    });
+    await store.patch({ usage: { enabled: false } });
+    expect(loadConfig(paseoHome, { env: {} }).usageEnabled).toBe(false);
+    const persisted = loadPersistedConfig(paseoHome);
+    const restarted = new DaemonConfigStore(paseoHome, reloadableConfig(persisted));
+    expect(restarted.get().usage).toEqual({ enabled: false });
+    writeFileSync(
+      path.join(paseoHome, "config.json"),
+      JSON.stringify({ daemon: { usage: { enabled: true } } }),
+    );
+    await store.reload();
+    expect(store.get().usage).toEqual({ enabled: true });
+  } finally {
+    rmSync(paseoHome, { recursive: true, force: true });
+  }
 });
