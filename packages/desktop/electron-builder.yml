@@ -102,5 +102,5 @@ win:
         - arm64
 nsis:
   oneClick: false
-  perMachine: false
+  perMachine: true
   allowToChangeInstallationDirectory: true
