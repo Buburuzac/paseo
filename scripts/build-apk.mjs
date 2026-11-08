@@ -25,8 +25,15 @@ const env = {
       ? "-dirty"
       : ""),
 };
+// On Windows, npm/npx/gradlew resolve to .cmd/.bat shims that Node refuses to spawn without a
+// shell (EINVAL since the CVE-2024-27980 fix), and cmd.exe skips the working directory when
+// NoDefaultCurrentDirectoryInExePath is set, so the wrapper needs an absolute path.
+const isWindows = process.platform === "win32";
+const androidDirectory = path.join(app, "android");
+const gradleWrapper = path.join(androidDirectory, isWindows ? "gradlew.bat" : "gradlew");
 function run(command, args, cwd) {
-  const result = spawnSync(command, args, { cwd, env, stdio: "inherit" });
+  const executable = isWindows && command.includes(" ") ? `"${command}"` : command;
+  const result = spawnSync(executable, args, { cwd, env, stdio: "inherit", shell: isWindows });
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
@@ -34,9 +41,12 @@ run("npm", ["run", "build:app-deps"], root);
 run("npx", ["expo", "prebuild", "--platform", "android", "--no-install"], app);
 // Gradle does not track Metro's environment flags. Always regenerate the JS artifact
 // so a previous ordinary release cannot silently bypass the profiling renderer.
-rmSync(path.join(app, "android/app/build/generated/assets"), { recursive: true, force: true });
+rmSync(path.join(androidDirectory, "app/build/generated/assets"), {
+  recursive: true,
+  force: true,
+});
 run(
-  "./gradlew",
+  gradleWrapper,
   [
     "assembleRelease",
     "--no-daemon",
@@ -44,9 +54,12 @@ run(
     "-Dorg.gradle.parallel=false",
     `-PreactNativeArchitectures=${architectures}`,
   ],
-  path.join(app, "android"),
+  androidDirectory,
 );
 const destination = path.join(root, `artifacts/paseo-dogfood-${target}.apk`);
 mkdirSync(path.dirname(destination), { recursive: true });
-copyFileSync(path.join(app, "android/app/build/outputs/apk/release/app-release.apk"), destination);
+copyFileSync(
+  path.join(androidDirectory, "app/build/outputs/apk/release/app-release.apk"),
+  destination,
+);
 console.log(`\nDiagnostic release APK: ${destination}\nLogs: Downloads/Paseo diagnostics\n`);
