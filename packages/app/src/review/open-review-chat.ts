@@ -37,7 +37,7 @@ export function openReviewChat(input: OpenReviewChatInput): void {
         model: input.model.trim() || null,
         modeId: null,
         thinkingOptionId: null,
-        featureValues: {},
+        providerOptions: {},
       }
     : undefined;
   const target = normalizeWorkspaceTabTarget({ kind: "draft", draftId, setup });
