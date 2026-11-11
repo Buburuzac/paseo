@@ -48,6 +48,7 @@ export function UpdateCalloutSource() {
     checkForUpdates,
     installUpdate,
     isInstalling,
+    checksAutomatically,
   } = useDesktopAppUpdater();
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -57,10 +58,9 @@ export function UpdateCalloutSource() {
   const retry = useStableEvent(() => {
     void checkForUpdates();
   });
+  // useDesktopAppUpdater already checks once when automatic checks become enabled.
   useEffect(() => {
-    if (!isDesktopApp) return;
-
-    void checkForUpdates({ intent: "automatic", silent: true });
+    if (!isDesktopApp || !checksAutomatically) return;
 
     intervalRef.current = setInterval(() => {
       void checkForUpdates({ intent: "automatic", silent: true });
@@ -71,7 +71,7 @@ export function UpdateCalloutSource() {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isDesktopApp, checkForUpdates]);
+  }, [isDesktopApp, checksAutomatically, checkForUpdates]);
 
   useEffect(() => {
     const descriptor = resolveUpdateCalloutDescriptor({

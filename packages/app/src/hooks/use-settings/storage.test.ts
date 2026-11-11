@@ -655,6 +655,7 @@ describe("loadSettingsFromStorage", () => {
       settings: {
         releaseChannel: "beta",
         notifications: { playSound: true },
+        updates: { checkAutomatically: true },
         daemon: { manageBuiltInDaemon: false, keepRunningAfterQuit: true },
       },
     });

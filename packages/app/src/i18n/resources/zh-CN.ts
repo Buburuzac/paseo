@@ -2594,6 +2594,8 @@ export const zhCN: TranslationResources = {
         checking: "正在检查...",
         alertTitle: "错误",
         alertMessage: "无法打开更新确认对话框。",
+        checkAutomatically: "自动检查更新",
+        checkAutomaticallyHint: "在后台检查，并在更新就绪时显示提示",
       },
     },
     appearance: {

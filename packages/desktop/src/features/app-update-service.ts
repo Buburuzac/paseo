@@ -79,6 +79,7 @@ export interface AppUpdateServiceDeps {
   isPackaged(): boolean;
   now(): number;
   bucket(): Promise<number>;
+  isAutomaticCheckEnabled(): Promise<boolean>;
   reportCheckError?(error: unknown): void;
   reportRuntimeError?(error: unknown): void;
   reportInstallError?(message: string): void;
@@ -130,6 +131,8 @@ function getErrorMessage(error: unknown): string {
   }
   return String(error);
 }
+
+const AUTOMATIC_CHECKS_DISABLED_MESSAGE = "Automatic update checks are disabled.";
 
 function buildDeferredInstallResult(currentVersion: string): AppUpdateInstallResult {
   return {
@@ -255,6 +258,18 @@ export function createAppUpdateService(deps: AppUpdateServiceDeps): AppUpdateSer
     }
 
     return runCheckExclusively(async () => {
+      // Read inside the queue so checks keep their call order. Also refuses the quit-time
+      // revalidation, so a download from a manual check installs only when the user asks.
+      // The error keeps silent renderer checks from committing "up to date" over a pending update.
+      if (intent === "automatic" && !(await deps.isAutomaticCheckEnabled())) {
+        return buildCheckResult({
+          currentVersion,
+          hasUpdate: false,
+          readyToInstall: false,
+          errorMessage: AUTOMATIC_CHECKS_DISABLED_MESSAGE,
+        });
+      }
+
       configureRuntime(releaseChannel, intent);
 
       try {

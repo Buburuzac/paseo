@@ -24,6 +24,8 @@ export interface DesktopAppUpdaterSnapshot {
   errorMessage: string | null;
   installMessage: string | null;
   lastCheckedAt: number | null;
+  // Intent of the check that produced the current status; a pending update is rechecked with it.
+  lastCheckIntent: DesktopAppUpdateCheckIntent | null;
   isChecking: boolean;
   isInstalling: boolean;
 }
@@ -69,6 +71,7 @@ interface InternalState {
   errorMessage: string | null;
   installMessage: string | null;
   lastCheckedAt: number | null;
+  lastCheckIntent: DesktopAppUpdateCheckIntent | null;
   isInstalling: boolean;
   requestVersion: number;
 }
@@ -79,6 +82,7 @@ const INITIAL_STATE: InternalState = {
   errorMessage: null,
   installMessage: null,
   lastCheckedAt: null,
+  lastCheckIntent: null,
   isInstalling: false,
   requestVersion: 0,
 };
@@ -90,6 +94,7 @@ function buildSnapshot(state: InternalState): DesktopAppUpdaterSnapshot {
     errorMessage: state.errorMessage,
     installMessage: state.installMessage,
     lastCheckedAt: state.lastCheckedAt,
+    lastCheckIntent: state.lastCheckIntent,
     isChecking: state.status === "checking",
     isInstalling: state.status === "installing" || state.isInstalling,
   };
@@ -189,6 +194,22 @@ export function formatStatusText(input: {
   return i18n.t("desktop.updates.status.idle");
 }
 
+// With automatic checks on, a pending update is rechecked automatically. With them off,
+// only an update the user found manually is followed until its download is ready.
+export function resolvePendingRecheckIntent(input: {
+  status: DesktopAppUpdateStatus;
+  lastCheckIntent: DesktopAppUpdateCheckIntent | null;
+  checksAutomatically: boolean;
+}): DesktopAppUpdateCheckIntent | null {
+  if (input.status !== "pending") {
+    return null;
+  }
+  if (input.checksAutomatically) {
+    return "automatic";
+  }
+  return input.lastCheckIntent === "manual" ? "manual" : null;
+}
+
 export function createDesktopAppUpdater(deps: DesktopAppUpdaterDeps): DesktopAppUpdater {
   let state: InternalState = { ...INITIAL_STATE };
   let cachedSnapshot: DesktopAppUpdaterSnapshot = buildSnapshot(state);
@@ -244,6 +265,7 @@ export function createDesktopAppUpdater(deps: DesktopAppUpdaterDeps): DesktopApp
           errorMessage: result.errorMessage,
           installMessage: null,
           lastCheckedAt: nextLastCheckedAt,
+          lastCheckIntent: intent,
         });
         return result;
       }
@@ -269,6 +291,7 @@ export function createDesktopAppUpdater(deps: DesktopAppUpdaterDeps): DesktopApp
         errorMessage: null,
         installMessage: null,
         lastCheckedAt: nextLastCheckedAt,
+        lastCheckIntent: intent,
       });
 
       return result;
@@ -286,6 +309,7 @@ export function createDesktopAppUpdater(deps: DesktopAppUpdaterDeps): DesktopApp
           status: "error",
           errorMessage: message,
           lastCheckedAt: intent === "manual" ? deps.now() : state.lastCheckedAt,
+          lastCheckIntent: intent,
         });
       }
       return null;

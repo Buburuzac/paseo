@@ -35,6 +35,9 @@ const DEFAULT_DESKTOP: DesktopSettings = {
   notifications: {
     playSound: true,
   },
+  updates: {
+    checkAutomatically: true,
+  },
   daemon: {
     manageBuiltInDaemon: true,
     keepRunningAfterQuit: false,

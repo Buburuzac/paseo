@@ -90,12 +90,14 @@ import { FilesSection } from "@/screens/settings/files-section";
 import { Button } from "@/components/ui/button";
 import { CommunityLinks } from "@/components/community-links";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { Switch } from "@/components/ui/switch";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { DesktopPermissionsSection } from "@/desktop/components/desktop-permissions-section";
 import { DesktopNotificationsSection } from "@/desktop/components/desktop-notifications-section";
 import { BrowserDataSection } from "@/desktop/browser/settings/browser-data-section";
 import { IntegrationsSection } from "@/desktop/components/integrations-section";
 import { isElectronRuntime } from "@/desktop/host";
+import { useDesktopSettings } from "@/desktop/settings/desktop-settings";
 import { useDesktopAppUpdater } from "@/desktop/updates/use-desktop-app-updater";
 import { formatVersionWithPrefix } from "@/desktop/updates/desktop-updates";
 import { resolveAppVersion } from "@/utils/app-version";
@@ -714,6 +716,12 @@ function DesktopAppUpdateRow() {
   const { t } = useTranslation();
   const { settings, updateSettings } = useSettings();
   const {
+    settings: desktopSettings,
+    isLoading: isLoadingDesktopSettings,
+    isSaving: isSavingDesktopSettings,
+    updateSettings: updateDesktopSettings,
+  } = useDesktopSettings();
+  const {
     isDesktopApp,
     statusText,
     availableUpdate,
@@ -746,6 +754,14 @@ function DesktopAppUpdateRow() {
       void updateSettings({ releaseChannel });
     },
     [updateSettings],
+  );
+  const handleCheckAutomaticallyChange = useCallback(
+    (checkAutomatically: boolean) => {
+      void updateDesktopSettings({ updates: { checkAutomatically } }).catch(() => {
+        // useDesktopSettings owns the user-visible IPC error.
+      });
+    },
+    [updateDesktopSettings],
   );
   const releaseChannelOptions = useMemo(
     () => [
@@ -802,6 +818,23 @@ function DesktopAppUpdateRow() {
           value={settings.releaseChannel}
           onValueChange={handleReleaseChannelChange}
           options={releaseChannelOptions}
+        />
+      </View>
+      <View style={[settingsStyles.row, settingsStyles.rowBorder]}>
+        <View style={settingsStyles.rowContent}>
+          <Text style={settingsStyles.rowTitle}>
+            {t("settings.about.updates.checkAutomatically")}
+          </Text>
+          <Text style={settingsStyles.rowHint}>
+            {t("settings.about.updates.checkAutomaticallyHint")}
+          </Text>
+        </View>
+        <Switch
+          value={desktopSettings.updates.checkAutomatically}
+          onValueChange={handleCheckAutomaticallyChange}
+          disabled={isLoadingDesktopSettings || isSavingDesktopSettings}
+          accessibilityLabel={t("settings.about.updates.checkAutomatically")}
+          testID="desktop-updates-check-automatically-switch"
         />
       </View>
       <View style={[settingsStyles.row, settingsStyles.rowBorder]}>

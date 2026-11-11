@@ -2637,6 +2637,8 @@ export const ko: TranslationResources = {
         checking: "확인 중...",
         alertTitle: "오류",
         alertMessage: "업데이트 확인 대화 상자를 열 수 없습니다.",
+        checkAutomatically: "자동으로 업데이트 확인",
+        checkAutomaticallyHint: "백그라운드에서 확인하고 업데이트가 준비되면 알림을 표시합니다",
       },
     },
     appearance: {

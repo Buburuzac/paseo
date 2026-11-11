@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   createAppUpdateService,
@@ -151,13 +151,18 @@ class FakeAppUpdateRuntime implements AppUpdateRuntime {
   }
 }
 
-function createService(input?: { now?: () => number; bucket?: () => Promise<number> }) {
+function createService(input?: {
+  now?: () => number;
+  bucket?: () => Promise<number>;
+  isAutomaticCheckEnabled?: () => Promise<boolean>;
+}) {
   const runtime = new FakeAppUpdateRuntime();
   const service = createAppUpdateService({
     runtime,
     isPackaged: () => true,
     now: input?.now ?? (() => Date.parse("2026-04-28T12:00:00.000Z")),
     bucket: input?.bucket ?? (async () => 0.99),
+    isAutomaticCheckEnabled: input?.isAutomaticCheckEnabled ?? (async () => true),
   });
   return { runtime, service };
 }
@@ -296,8 +301,7 @@ describe("app update service", () => {
       intent: "manual",
     });
 
-    await Promise.resolve();
-    expect(runtime.checkCount).toBe(1);
+    await vi.waitFor(() => expect(runtime.checkCount).toBe(1));
 
     automaticCheck.resolve({ isUpdateAvailable: false, updateInfo: rolledOutUpdate });
     await automaticPending;
@@ -367,6 +371,64 @@ describe("app update service", () => {
       date: "2026-04-28T00:00:00.000Z",
       errorMessage: null,
     });
+  });
+
+  it("does not check automatically when automatic checks are disabled", async () => {
+    const { runtime, service } = createService({ isAutomaticCheckEnabled: async () => false });
+    runtime.nextCheck({ isUpdateAvailable: true, updateInfo: rolledOutUpdate });
+
+    const result = await service.checkForAppUpdate({
+      currentVersion: "1.2.3",
+      releaseChannel: "stable",
+      intent: "automatic",
+    });
+
+    expect(runtime.checkCount).toBe(0);
+    expect(result.hasUpdate).toBe(false);
+    expect(result.errorMessage).toBe("Automatic update checks are disabled.");
+  });
+
+  it("still checks manually when automatic checks are disabled", async () => {
+    const { runtime, service } = createService({ isAutomaticCheckEnabled: async () => false });
+    runtime.nextCheck({ isUpdateAvailable: true, updateInfo: rolledOutUpdate });
+
+    const result = await service.checkForAppUpdate({
+      currentVersion: "1.2.3",
+      releaseChannel: "stable",
+      intent: "manual",
+    });
+
+    expect(runtime.checkCount).toBe(1);
+    expect(result.hasUpdate).toBe(true);
+    expect(result.latestVersion).toBe("1.2.4");
+  });
+
+  it("does not install on quit when automatic checks are disabled", async () => {
+    let automaticChecksEnabled = true;
+    const { runtime, service } = createService({
+      bucket: async () => 0,
+      isAutomaticCheckEnabled: async () => automaticChecksEnabled,
+    });
+    runtime.nextCheck({ isUpdateAvailable: true, updateInfo: rolledOutUpdate });
+
+    await service.checkForAppUpdate({
+      currentVersion: "1.2.3",
+      releaseChannel: "stable",
+      intent: "manual",
+    });
+    runtime.finishUpdateDownload(rolledOutUpdate);
+
+    automaticChecksEnabled = false;
+    runtime.nextCheck({ isUpdateAvailable: true, updateInfo: rolledOutUpdate });
+    const installed = await service.installUpdateOnQuit({
+      currentVersion: "1.2.3",
+      releaseChannel: "stable",
+      signal: new AbortController().signal,
+    });
+
+    expect(installed).toBe(false);
+    expect(runtime.checkCount).toBe(1);
+    expect(runtime.installedVersions).toEqual([]);
   });
 
   it("installs the newest admitted release when quitting with an older download", async () => {

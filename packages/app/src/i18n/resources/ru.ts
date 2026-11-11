@@ -2672,6 +2672,9 @@ export const ru: TranslationResources = {
         checking: "Проверка...",
         alertTitle: "Ошибка",
         alertMessage: "Не удалось открыть диалог подтверждения обновления.",
+        checkAutomatically: "Проверять обновления автоматически",
+        checkAutomaticallyHint:
+          "Проверять в фоне и показывать уведомление, когда обновление готово",
       },
     },
     appearance: {

@@ -22,6 +22,7 @@ import {
   type AppReleaseChannel,
   type AppUpdateCheckIntent,
 } from "./app-update-rollout.js";
+import { getDesktopSettingsStore } from "../settings/desktop-settings-electron.js";
 
 export {
   bucketFromStagingUserId,
@@ -227,6 +228,8 @@ const appUpdateService = createAppUpdateService({
   isPackaged: () => app.isPackaged,
   now: () => Date.now(),
   bucket: async () => bucketFromStagingUserId(await getStagingUserId()),
+  isAutomaticCheckEnabled: async () =>
+    (await getDesktopSettingsStore().get()).updates.checkAutomatically,
   reportCheckError: (error) => {
     console.error("[auto-updater] Failed to check for updates:", error);
   },

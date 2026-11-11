@@ -2662,6 +2662,9 @@ export const ptBR: TranslationResources = {
         checking: "Verificando...",
         alertTitle: "Erro",
         alertMessage: "Não foi possível abrir o diálogo de confirmação da atualização.",
+        checkAutomatically: "Verificar atualizações automaticamente",
+        checkAutomaticallyHint:
+          "Verificar em segundo plano e mostrar um aviso quando uma atualização estiver pronta",
       },
     },
     appearance: {

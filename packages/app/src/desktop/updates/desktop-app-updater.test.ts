@@ -3,6 +3,7 @@ import { i18n } from "@/i18n/i18next";
 import {
   createDesktopAppUpdater,
   formatStatusText,
+  resolvePendingRecheckIntent,
   type DesktopAppUpdater,
   type DesktopAppUpdaterErrorReport,
 } from "./desktop-app-updater";
@@ -126,6 +127,49 @@ describe("desktop app updater — check", () => {
       status: "pending",
       availableUpdate: { latestVersion: "1.2.3", readyToInstall: false },
     });
+  });
+
+  it("remembers that a manual check found the pending update", async () => {
+    const { updater, port } = createUpdater();
+    port.nextCheckResult(
+      buildFakeCheckResult({ hasUpdate: true, readyToInstall: false, latestVersion: "1.2.3" }),
+    );
+
+    await updater.checkForUpdates({ releaseChannel: "stable", intent: "manual" });
+
+    expect(updater.getSnapshot()).toMatchObject({ status: "pending", lastCheckIntent: "manual" });
+  });
+
+  it("remembers that an automatic check found the pending update", async () => {
+    const { updater, port } = createUpdater();
+    port.nextCheckResult(
+      buildFakeCheckResult({ hasUpdate: true, readyToInstall: false, latestVersion: "1.2.3" }),
+    );
+
+    await updater.checkForUpdates({ releaseChannel: "stable", intent: "automatic", silent: true });
+
+    expect(updater.getSnapshot()).toMatchObject({
+      status: "pending",
+      lastCheckIntent: "automatic",
+    });
+  });
+
+  it("keeps the pending update's check intent when a silent check is refused", async () => {
+    const { updater, port } = createUpdater();
+    port.nextCheckResult(
+      buildFakeCheckResult({ hasUpdate: true, readyToInstall: false, latestVersion: "1.2.3" }),
+    );
+    await updater.checkForUpdates({ releaseChannel: "stable", intent: "manual" });
+
+    port.nextCheckResult(
+      buildFakeCheckResult({
+        hasUpdate: false,
+        errorMessage: "Automatic update checks are disabled.",
+      }),
+    );
+    await updater.checkForUpdates({ releaseChannel: "stable", intent: "automatic", silent: true });
+
+    expect(updater.getSnapshot()).toMatchObject({ status: "pending", lastCheckIntent: "manual" });
   });
 
   it("reports 'up-to-date' when the check resolves with no update", async () => {
@@ -376,6 +420,48 @@ describe("desktop app updater — subscribe", () => {
     unsubscribe();
 
     expect(notifications).toEqual(["checking", "available"]);
+  });
+});
+
+describe("resolvePendingRecheckIntent", () => {
+  it("rechecks a pending update automatically while automatic checks are on", () => {
+    expect(
+      resolvePendingRecheckIntent({
+        status: "pending",
+        lastCheckIntent: "manual",
+        checksAutomatically: true,
+      }),
+    ).toBe("automatic");
+  });
+
+  it("follows a manually found update when automatic checks are off", () => {
+    expect(
+      resolvePendingRecheckIntent({
+        status: "pending",
+        lastCheckIntent: "manual",
+        checksAutomatically: false,
+      }),
+    ).toBe("manual");
+  });
+
+  it("stops rechecking an automatically found update when automatic checks are off", () => {
+    expect(
+      resolvePendingRecheckIntent({
+        status: "pending",
+        lastCheckIntent: "automatic",
+        checksAutomatically: false,
+      }),
+    ).toBeNull();
+  });
+
+  it("does not recheck when no update is pending", () => {
+    expect(
+      resolvePendingRecheckIntent({
+        status: "available",
+        lastCheckIntent: "manual",
+        checksAutomatically: true,
+      }),
+    ).toBeNull();
   });
 });
 

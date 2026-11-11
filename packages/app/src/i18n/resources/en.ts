@@ -2754,6 +2754,8 @@ export const en = {
         checking: "Checking...",
         alertTitle: "Error",
         alertMessage: "Unable to open the update confirmation dialog.",
+        checkAutomatically: "Check for updates automatically",
+        checkAutomaticallyHint: "Check in the background and show a notice when an update is ready",
       },
     },
     appearance: {

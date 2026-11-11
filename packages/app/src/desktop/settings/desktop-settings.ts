@@ -16,6 +16,9 @@ export interface DesktopSettings {
   notifications: {
     playSound: boolean;
   };
+  updates: {
+    checkAutomatically: boolean;
+  };
   daemon: {
     manageBuiltInDaemon: boolean;
     keepRunningAfterQuit: boolean;
@@ -25,6 +28,7 @@ export interface DesktopSettings {
 export interface DesktopSettingsPatch {
   releaseChannel?: ReleaseChannel;
   notifications?: Partial<DesktopSettings["notifications"]>;
+  updates?: Partial<DesktopSettings["updates"]>;
   daemon?: Partial<DesktopSettings["daemon"]>;
 }
 
@@ -32,6 +36,9 @@ export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
   releaseChannel: "stable",
   notifications: {
     playSound: true,
+  },
+  updates: {
+    checkAutomatically: true,
   },
   daemon: {
     manageBuiltInDaemon: true,
@@ -152,6 +159,7 @@ export async function migrateLegacyDesktopSettings(input: {
 function parseDesktopSettings(raw: unknown): DesktopSettings {
   const record = isRecord(raw) ? raw : {};
   const notifications = isRecord(record.notifications) ? record.notifications : {};
+  const updates = isRecord(record.updates) ? record.updates : {};
   const daemon = isRecord(record.daemon) ? record.daemon : {};
 
   return {
@@ -161,6 +169,12 @@ function parseDesktopSettings(raw: unknown): DesktopSettings {
         typeof notifications.playSound === "boolean"
           ? notifications.playSound
           : DEFAULT_DESKTOP_SETTINGS.notifications.playSound,
+    },
+    updates: {
+      checkAutomatically:
+        typeof updates.checkAutomatically === "boolean"
+          ? updates.checkAutomatically
+          : DEFAULT_DESKTOP_SETTINGS.updates.checkAutomatically,
     },
     daemon: {
       manageBuiltInDaemon:
@@ -185,6 +199,10 @@ function mergeDesktopSettings(
       ...current.notifications,
       ...updates.notifications,
     },
+    updates: {
+      ...current.updates,
+      ...updates.updates,
+    },
     daemon: {
       ...current.daemon,
       ...updates.daemon,
@@ -196,6 +214,7 @@ function normalizePatch(updates: DesktopSettingsPatch): Record<string, unknown> 
   return {
     ...(updates.releaseChannel ? { releaseChannel: updates.releaseChannel } : {}),
     ...(updates.notifications ? { notifications: updates.notifications } : {}),
+    ...(updates.updates ? { updates: updates.updates } : {}),
     ...(updates.daemon ? { daemon: updates.daemon } : {}),
   };
 }

@@ -2647,6 +2647,8 @@ export const ja: TranslationResources = {
         checking: "確認中...",
         alertTitle: "エラー",
         alertMessage: "更新確認ダイアログを開けません。",
+        checkAutomatically: "アップデートを自動的に確認",
+        checkAutomaticallyHint: "バックグラウンドで確認し、アップデートの準備ができたら通知します",
       },
     },
     appearance: {

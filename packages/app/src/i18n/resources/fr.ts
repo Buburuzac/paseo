@@ -2681,6 +2681,9 @@ export const fr: TranslationResources = {
         checking: "Vérification…",
         alertTitle: "Erreur",
         alertMessage: "Impossible d’ouvrir la boîte de dialogue de confirmation de mise à jour.",
+        checkAutomatically: "Rechercher les mises à jour automatiquement",
+        checkAutomaticallyHint:
+          "Rechercher en arrière-plan et afficher un avis lorsqu’une mise à jour est prête",
       },
     },
     appearance: {
