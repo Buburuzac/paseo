@@ -1159,6 +1159,7 @@ describe("relay external socket reconnect behavior", () => {
     expect(serverInfo.features?.canonicalSubmittedPrompts).toBe(true);
     expect(serverInfo.features?.providersSnapshotCwd).toBe(true);
     expect(serverInfo.features?.hopliteProvider).toBe(false);
+    expect(serverInfo.features?.fxProvider).toBe(false);
     expect(serverInfo.features?.pluginLogs).toBe(true);
     expect(serverInfo.features?.userPrompts).toBe(true);
     expect(serverInfo.features?.workspaceMarkUnread).toBe(true);

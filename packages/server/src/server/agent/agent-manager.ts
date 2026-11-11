@@ -1412,6 +1412,11 @@ export class AgentManager {
     return this.timelineStore.getRows(id);
   }
 
+  /** The timeline head of a loaded agent, or null when this agent is not loaded. Never loads. */
+  getLoadedTimelineHead(id: string): { epoch: string; seq: number } | null {
+    return this.getAgent(id) ? this.timelineStore.getHead(id) : null;
+  }
+
   fetchTimeline(id: string, options?: AgentTimelineFetchOptions): AgentTimelineFetchResult {
     this.requireAgent(id);
     return this.timelineStore.fetch(id, options);
@@ -1578,6 +1583,7 @@ export class AgentManager {
         purpose: "interactive",
         workspaceId: options.workspaceId ?? null,
         title: options.initialTitle ?? storedConfig.title ?? null,
+        background: options.background,
         labels: options.labels ?? {},
         metadata: options.metadata ?? {},
       },
@@ -1721,6 +1727,7 @@ export class AgentManager {
         purpose,
         workspaceId,
         title: record?.title ?? mergedConfig.title ?? null,
+        background: options?.background,
         ...agentEntityData(record ?? options),
       },
     );
@@ -1903,6 +1910,7 @@ export class AgentManager {
         purpose: "interactive",
         workspaceId: existing.workspaceId,
         title: await this.resolveInitialPersistedTitle(agentId, existing.config, null),
+        background: existing.background,
         labels: existing.labels,
         metadata: existing.metadata,
       },
@@ -2218,8 +2226,8 @@ export class AgentManager {
     }
   }
 
-  async archiveAgent(agentId: string): Promise<{ archivedAt: string }> {
-    return this.runLifecycleMutation(agentId, () => this.archiveAgentUnlocked(agentId));
+  async archiveAgent(agentId: string, archivedAt?: string): Promise<{ archivedAt: string }> {
+    return this.runLifecycleMutation(agentId, () => this.archiveAgentUnlocked(agentId, archivedAt));
   }
 
   private async archiveAgentUnlocked(
@@ -2256,13 +2264,14 @@ export class AgentManager {
       throw new Error(`Agent ${agentId} not found in storage after snapshot`);
     }
 
-    const { archivedAt } = await this.markRecordArchived(stored, requestedArchivedAt);
-    agent.updatedAt = new Date(archivedAt);
+    const archivedRecord = await this.markRecordArchived(stored, requestedArchivedAt);
+    const { archivedAt } = archivedRecord;
+    agent.updatedAt = new Date(archivedRecord.updatedAt);
     await this.closeAgentRuntime(agentId);
     await this.syncNativeArchiveState(stored.provider, stored.persistence, "archive");
     this.discardRetainedAgentState(agentId);
 
-    await this.cascadeArchiveChildren(stored);
+    await this.cascadeArchiveChildren(archivedRecord);
 
     return { archivedAt };
   }
@@ -2272,7 +2281,7 @@ export class AgentManager {
   // children so subagent fleets don't outlive their orchestrator. Detached
   // handoff agents omit this label, so they stand outside the cascade.
   private async cascadeArchiveChildren(
-    parent: Pick<StoredAgentRecord, "id" | "workspaceId">,
+    parent: Pick<ArchivedStoredAgentRecord, "id" | "workspaceId" | "archivedAt">,
   ): Promise<void> {
     const registry = this.registry;
     if (!registry) {
@@ -2306,9 +2315,9 @@ export class AgentManager {
             this.dispatchStoredAgentState(detached.record);
           }
         } else if (this.agents.has(currentChild.id)) {
-          await this.archiveAgentUnlocked(currentChild.id);
+          await this.archiveAgentUnlocked(currentChild.id, parent.archivedAt);
         } else {
-          await this.archiveSnapshotUnlocked(currentChild.id, new Date().toISOString());
+          await this.archiveSnapshotUnlocked(currentChild.id, parent.archivedAt);
         }
       });
     }
@@ -2324,7 +2333,7 @@ export class AgentManager {
         if (!current || getParentAgentIdFromLabels(current.labels) !== parentAgentId) {
           return;
         }
-        await this.archiveAgentUnlocked(current.id);
+        await this.archiveAgentUnlocked(current.id, parent.archivedAt);
       });
     }
   }
@@ -2334,7 +2343,7 @@ export class AgentManager {
     archivedAt = new Date().toISOString(),
   ): Promise<ArchivedStoredAgentRecord> {
     const archivedRecord = await this.persistArchivedRecord(record, {
-      archivedAt,
+      archivedAt: record.archivedAt ?? archivedAt,
       updatedAt: archivedAt,
     });
 
@@ -2533,9 +2542,17 @@ export class AgentManager {
         const set = Object.fromEntries(Object.entries(patch).filter(([, value]) => value != null));
         const resolved = this.effectiveOptionsFor(agent.provider, set);
         sent = Object.fromEntries(Object.keys(patch).map((key) => [key, resolved[key] ?? null]));
+        const modelBefore = agent.runtimeInfo?.model;
         ended = (await agent.session.applyOptions(sent)) ?? {};
         // Changes the provider made on its own while applying are older than its final answer.
         await this.drainSessionEvents(agentId);
+        await this.refreshRuntimeInfo(agent, { emit: false });
+        // An option can choose the model too, as an fx connection does. Reopening the agent on
+        // the earlier preference would send that model to the new connection.
+        const modelAfter = agent.runtimeInfo?.model;
+        if (agent.config.model && modelAfter && modelAfter !== modelBefore) {
+          agent.config.model = modelAfter;
+        }
       }
       this.storeOptionsPatch({ agent, patch: { ...patch, ...ended } });
       this.updateEffectiveOptions({ agent, sent, reported: ended });
@@ -2867,7 +2884,7 @@ export class AgentManager {
     if (!nextRecord.internal) this.dispatchStoredAgentState(nextRecord);
 
     await this.fireAgentArchived(agentId);
-    await this.cascadeArchiveChildren(record);
+    await this.cascadeArchiveChildren(nextRecord);
 
     return nextRecord;
   }
@@ -6114,6 +6131,7 @@ export class AgentManager {
       purpose: PluginSessionOpenRequest["purpose"];
       workspaceId?: string | null;
       title?: string | null;
+      background?: boolean;
       labels?: Record<string, string>;
       metadata?: AgentMetadata;
     },
@@ -6133,6 +6151,7 @@ export class AgentManager {
         purpose: opening?.purpose ?? "interactive",
         env: { ...env },
         title: opening?.title ?? null,
+        background: opening?.background === true,
         ...agentEntityData(opening),
         tools: [],
         mcpServers: {},
